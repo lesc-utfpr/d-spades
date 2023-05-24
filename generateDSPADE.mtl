@@ -1,0 +1,444 @@
+[comment encoding = UTF-8 /]
+[module generateDSPADE('http://www.example.org/EMSML')]
+
+[template public generateDspadeDemo(anEntity : entity)  ? (self.name = 'MyActor') ]
+[comment @main/]
+[comment
+Generate the header file for the model
+/]
+[file (anEntity.name.replaceAll(' ', '_').concat('.h'), false, 'UTF-8')]
+[anEntity.genCopyrightHeader()/]
+#include "CompositeEntity.h"
+#include "TypedIORelation.h"
+[anEntity.genClassIncludes2()/]
+[anEntity.genForwardDeclarations()/]
+[anEntity.genCompositesDeclarations()/]
+[/file]
+
+[comment
+Generate the implementation (cpp) file for the model
+/]
+[file (anEntity.name.replaceAll(' ', '_').concat('.cpp'), false, 'UTF-8')]
+[anEntity.genCopyrightHeader()/]
+
+// FIXME - find a way to check if this model uses modal models, or else we do not need these two:
+#include "Port.h"
+#include "Token.h"
+
+// These two are needed because abs() from std C differs from std::abs
+#include <cmath>
+using namespace std;
+
+
+#include "[anEntity.name.replaceAll(' ', '_').concat('.h')/]"
+
+[anEntity.genClassImlementation()/]
+
+[/file]
+
+[/template]
+
+[**
+ * This template generates the classes forward declarations
+*/]
+[template private genForwardDeclarations(anEntity : entity)
+ {className : String = anEntity.name.replaceAll(' ', '_').trim();} ]
+class [className /];
+[for (anEntityIter : entity | anEntity.entity)]
+[if anEntityIter.class = 'ptolemy.actor.TypedCompositeActor' or anEntityIter.class = 'ptolemy.domains.modal.modal.ModalModel']
+[anEntityIter.genForwardDeclarations()/]
+[/if]
+[if anEntityIter.class = 'ptolemy.domains.modal.modal.ModalController']
+class [className + anEntityIter.name.replaceAll(' ', '_').trim() /];
+[/if]
+[if anEntityIter.class = 'ptolemy.domains.modal.modal.ModalRefinement']
+class [className + anEntityIter.name.replaceAll(' ', '_').trim() /];
+[/if]
+[/for]
+[/template]
+
+[**
+ * This template generates the header file contents with classes declarations
+*/]
+[template private genCompositesDeclarations(anEntity : entity)
+ {className : String = anEntity.name.replaceAll(' ', '_').trim();} ]
+
+class [className /] : public CompositeEntity {
+public:
+    [className /](std::string sEntityName, Entity* pContainerEntity=NULL);
+    ~[className /]();
+    virtual bool initialize();
+
+private:
+    [anEntity.declareComposingEntities()/]
+    [anEntity.declareRelations()/]
+};
+
+[for (anEntityIter : entity | anEntity.entity)]
+[if anEntityIter.class = 'ptolemy.actor.TypedCompositeActor' or anEntityIter.class = 'ptolemy.domains.modal.modal.ModalModel']
+[anEntityIter.genCompositesDeclarations()/]
+
+[/if]
+[if anEntityIter.class = 'ptolemy.domains.modal.modal.ModalController']
+[anEntityIter.genModalControllerDeclarations()/]
+
+[/if]
+[/for]
+[/template]
+
+[**
+ * This template generates the header file contents with classes declaration for the Composite's controller:
+*/]
+[comment anEntity.eContainer(EMSML::entity).name /]
+[template private genModalControllerDeclarations(anEntity : entity) 
+ {className : String = anEntity.eContainer(EMSML::entity).name.replaceAll(' ', '_').trim() + anEntity.name.replaceAll(' ', '_').trim();} ]
+
+class [className /] : public ModalController {
+public:
+    [className /](std::string sEntityName, Entity* pContainerEntity=NULL);
+    ~[className /]();
+    virtual bool initialize();
+    virtual void updateInternalVariables();
+    virtual void updateOutpuPorts();
+    virtual bool checkTransitionEnabled(unsigned int transitionNumber);
+    virtual void actTransition(unsigned int transitionNumber);
+
+    enum Transitions{
+[for (aRelation : relation | anEntity.eContents(EMSML::relation)->select(r : relation | r.class = 'ptolemy.domains.modal.kernel.Transition') ) ]
+      [aRelation.name.toUpper() /],
+[/for]
+    };
+
+private:
+    /* Declare all the states as member variables: */
+[for (aState : entity | anEntity.eContents(EMSML::entity)->select(e : entity | e.class = 'ptolemy.domains.modal.kernel.State') ) ]
+  [let StateName : String = aState.name.replaceAll(' ', '_').trim() ]
+      ModalState [StateName /]{"[StateName /]", this};
+  [/let]
+[/for]
+    /* Member variables used in guard expression evaluation and output actions */
+[for (aPropertyIter : property | anEntity.eContents(EMSML::property)->select(p : property | p.class = 'ptolemy.data.expr.Parameter'))]
+    const double [aPropertyIter.name.replaceAll(' ', '_').trim() /]{[aPropertyIter.value /]};
+[/for]
+[for (aPortIter : port | anEntity.eContents(EMSML::port)->select(p : port | p.class = 'ptolemy.domains.modal.modal.RefinementPort'))]
+    double [aPortIter.name.replaceAll(' ', '_').trim() /];
+[/for]
+    /* END Member variables used in guard expression evaluation and output actions */
+};
+
+[/template]
+
+[comment This template generates copyright header /]
+[template private genCopyrightHeader(anEntity : entity)]
+/******************************************************************************/
+/* This module is proprietary to:                                             */
+/*     Itaipu - OP.DT - GSS                                                   */
+/* Auto generated with Eclipse EMF / Acceleo - DO NOT EDIT                    */
+/******************************************************************************/
+
+[/template]
+
+[comment This template generates header inclusion directives /]
+[template private genClassIncludes(anEntity : entity)]
+[comment FIXME: need to reccurr into every composite actor to retrieve necessary headers... /]
+[for (anEntityIterClass : String | anEntity.entity.class->asOrderedSet())]
+[if not (anEntityIterClass = 'ptolemy.actor.TypedCompositeActor' or anEntityIterClass = 'ptolemy.domains.modal.modal.ModalModel') ]
+#include "[anEntityIterClass.tokenize('.')->last().replaceAll(' ', '_').concat('.h')/]"
+[/if]
+[if anEntityIterClass = 'ptolemy.domains.modal.modal.ModalModel' ]
+#include "ModalController.h"
+[/if]
+[/for]
+[/template]
+
+
+[comment This template generates header inclusion directives /]
+[template private genClassIncludes2(anEntity : entity)]
+[for (aContainedEntity : entity | anEntity.entity->asOrderedSet())]
+[if aContainedEntity.class = 'ptolemy.actor.TypedCompositeActor' or aContainedEntity.class = 'ptolemy.domains.modal.modal.ModalModel']
+[aContainedEntity.genClassIncludes2()/]
+[else]
+#include "[aContainedEntity.class.tokenize('.')->last().replaceAll(' ', '_').concat('.h') /]"
+[/if]
+[/for]
+[/template]
+
+
+[**
+ * This template  declares member entities
+*/]
+[template private declareComposingEntities(anEntity : entity)]
+[for (anEntityIter : entity | anEntity.entity)]
+[comment - Test whether the type name coincides with the variable name /]
+    [if anEntityIter.class = 'ptolemy.actor.TypedCompositeActor' or anEntityIter.class = 'ptolemy.domains.modal.modal.ModalModel']
+[anEntityIter.name.replaceAll(' ', '_').trim()/]* ['p' + anEntityIter.name.replaceAll(' ', '_').trim()/]{NULL};
+    [else]
+[anEntityIter.class.tokenize('.')->last().replaceAll(' ', '_')/]* ['p' + anEntityIter.name.replaceAll(' ', '_').trim()/]{NULL};
+    [/if]
+[/for]
+[/template]
+
+
+[***********************************************
+ * This template generates class implementation
+************************************************/]
+[template private genClassImlementation(anEntity : entity)
+ {className : String = anEntity.name.replaceAll(' ', '_').trim();} ]
+/**********************************************************
+ * Follows methods implemented for class [className/]
+**********************************************************/
+[className/]::[className/](std::string sEntityName, Entity* pContainerEntity) : CompositeEntity(sEntityName, pContainerEntity)
+{
+}
+
+[className/]::~[className/]()
+{
+[for (anEntityIter : entity | anEntity.entity)]
+    delete ['p' + anEntityIter.name.replaceAll(' ', '_').trim()/];
+[/for]
+}
+
+bool [className/]::initialize()
+{
+    bool bInitStatus = true;
+
+    /* Initialize composite and instantiate contained entities */
+    [anEntity.genClassInit()/]
+    [comment Initialize composite entities contained in this entity: /]
+    [for (anEntityIter : entity | anEntity.entity)]
+    [comment if anEntityIter.class = 'ptolemy.actor.TypedCompositeActor' or anEntityIter.class = 'ptolemy.domains.modal.modal.ModalModel' /]
+    bInitStatus &= p[anEntityIter.name.replaceAll(' ', '_')/]->initialize();
+    [comment /if /]
+    [/for]
+
+    /* Instantiate ports */
+    [anEntity.genPortsInit()/]
+    /* Initialize relations */
+    [anEntity.genRelationsInit()/]
+
+    setInitialized(bInitStatus);
+    return bInitStatus;
+}
+
+[for (anEntityIter : entity | anEntity.entity)]
+[if anEntityIter.class = 'ptolemy.actor.TypedCompositeActor' or anEntityIter.class = 'ptolemy.domains.modal.modal.ModalModel']
+[anEntityIter.genClassImlementation()/]
+
+[/if]
+[if anEntityIter.class = 'ptolemy.domains.modal.modal.ModalController']
+[anEntityIter.genModalControllerImlementation()/]
+
+[/if]
+[/for]
+[/template]
+
+
+[***********************************************
+ * This template generates Modal Controller class implementation
+************************************************/]
+[template private genModalControllerImlementation(anEntity : entity)
+ {className : String = anEntity.eContainer(EMSML::entity).name.replaceAll(' ', '_').trim() + anEntity.name.replaceAll(' ', '_').trim();} ]
+/**********************************************************
+ * Follows methods implemented for class [className/]
+**********************************************************/
+[className/]::[className/](std::string sEntityName, Entity* pContainerEntity) : ModalController(sEntityName, pContainerEntity)
+{
+}
+
+[className/]::~[className/]()
+{
+}
+
+bool [className/]::initialize()
+{
+    bool bInitStatus = true;
+    [anEntity.genModalControllerInit()/]
+    /* Instantiate ports */
+    [anEntity.genPortsInit()/]
+    //FIXME in the template! setInitialized(bInitStatus);
+    return bInitStatus;
+}
+
+void [className/]::updateInternalVariables()
+{
+    /* Update variable corresponding to input ports with available tokens: */
+[for (aPort : port | anEntity.eContents(EMSML::port)->select(p : port | p.class = 'ptolemy.domains.modal.modal.RefinementPort') ) ]
+  [if ( aPort.eContents(EMSML::property)->select(pp : property | pp.name = 'output')->isEmpty() ) ]
+  [let PortName : String = aPort.name.replaceAll(' ', '_').trim() ]
+    [PortName /] = m_mapPorts[ '[' /]"[PortName /]"[ ']' /]->getToken().getDouble();
+  [/let]
+  [/if]
+[/for]
+}
+
+void [className/]::updateOutpuPorts()
+{
+    /* Send tokens tp output ports according to last state transition: */
+[for (aPort : port | anEntity.eContents(EMSML::port)->select(p : port | p.class = 'ptolemy.domains.modal.modal.RefinementPort') ) ]
+  [if (not aPort.eContents(EMSML::property)->select(pp : property | pp.name = 'output')->isEmpty() ) ]
+  [let PortName : String = aPort.name.replaceAll(' ', '_').trim() ]
+    Token tok([PortName /]);
+    m_mapPorts[ '[' /]"[PortName /]"[ ']' /]->sendToken(tok);
+  [/let]
+  [/if]
+[/for]
+}
+
+bool [className/]::checkTransitionEnabled(unsigned int transitionNumber)
+{
+    bool bRetVal = false;
+
+    switch(transitionNumber){
+[for (aRelation : relation | anEntity.eContents(EMSML::relation)->select(r : relation | r.class = 'ptolemy.domains.modal.kernel.Transition') ) ]
+      case [aRelation.name.toUpper() /]:
+        [if aRelation.eContents(EMSML::property)->select(p : property | p.name = 'defaultTransition')->isEmpty() ]
+        bRetVal = [aRelation.eContents(EMSML::property)->select(p : property | p.name = 'guardExpression').value /];
+        [else]
+        // default transitions are always enabled
+        bRetVal = true;
+        [/if]
+        break;
+[/for]
+      default:
+        break;
+    }
+    return bRetVal;
+}
+
+void [className/]::actTransition(unsigned int transitionNumber)
+{
+    switch(transitionNumber){
+[for (aRelation : relation | anEntity.eContents(EMSML::relation)->select(r : relation | r.class = 'ptolemy.domains.modal.kernel.Transition') ) ]
+      case [aRelation.name.toUpper() /]:
+        [aRelation.eContents(EMSML::property)->select(p : property | p.name = 'outputActions').value /];
+        break;
+[/for]
+      default:
+        break;
+    }
+}
+
+[/template]
+
+[comment This template generates composite actor initialization code /]
+[template private genClassInit(anEntity : entity)  post(trim())
+  {className : String = anEntity.name.replaceAll(' ', '_').trim();} ]
+// Contained entities:
+[for (anEntityIter : entity | anEntity.entity)]
+    [if anEntityIter.class = 'ptolemy.domains.modal.modal.ModalController']
+        [let VarClass : String = anEntityIter.name.replaceAll(' ', '_').trim() ]
+['p' + VarClass /] = new [className + VarClass /]("[VarClass/]", this);
+addComponentEntity(['p' + VarClass/]);
+        [/let]
+    [else]
+        [if anEntityIter.class = 'ptolemy.actor.TypedCompositeActor' or anEntityIter.class = 'ptolemy.domains.modal.modal.ModalModel']
+            [let VarClass : String = anEntityIter.name.replaceAll(' ', '_').trim() ]
+['p' + VarClass/] = new [VarClass/]("[VarClass/]", this);
+addComponentEntity(['p' + VarClass/]);
+            [/let]
+        [else]
+            [let VarName : String = anEntityIter.name.replaceAll(' ', '_').trim() ]
+['p' + VarName/] = new [anEntityIter.class.tokenize('.')->last()/]("[VarName/]", this);
+addComponentEntity(['p' + VarName/]);
+            [/let]
+        [/if]
+    [/if]
+
+[/for]
+[anEntity.declareParameters()/]
+[/template]
+
+[comment This template generates ports initialization code /]
+[template private genPortsInit(anEntity : entity)]
+[for (aPort : port | anEntity.port)]
+[comment: Modal models in PTII are created with output ports having both "input" and "output" properties... /]
+[if aPort.property->select(p:property | p.name='output')->isEmpty() and 
+not aPort.property->select(p:property | p.name='input')->isEmpty() ]
+newPort( "[aPort.name.replaceAll(' ', '_').trim() /]", 'I', Port::[aPort.class.tokenize('.')->last()/]);
+[elseif not aPort.property->select(p:property | p.name='output')->isEmpty() ]
+newPort( "[aPort.name.replaceAll(' ', '_').trim() /]", 'O');
+[/if]
+[/for]
+[/template]
+
+[comment This template generates relation instantiation code /]
+[template private declareRelations(anEntity : entity)]
+[for (aRelation : relation | anEntity.relation)]
+[aRelation.class.tokenize('.')->last() /] [aRelation.name.replaceAll(' ', '_') /];
+[/for]
+[/template]
+
+[comment This template generates relation initialization code /]
+[template private genRelationsInit(anEntity : entity)]
+[for (aRelation : relation | anEntity.relation)]
+[aRelation.name.replaceAll(' ', '_')/].setName("[aRelation.name.replaceAll(' ', '_')/]");
+[/for]
+
+[for (aLink : link | anEntity.link)]
+[if (aLink.port.tokenize('.')->size() > 1) ]
+bInitStatus &= [aLink.relation.replaceAll(' ', '_')/].connect(p[aLink.port.tokenize('.')->first().replaceAll(' ', '_')/]->getPort("[aLink.port.tokenize('.')->last().replaceAll(' ', '_')/]"));
+[else]
+bInitStatus &= [aLink.relation.replaceAll(' ', '_')/].connect(getPort("[aLink.port.replaceAll(' ', '_')/]"), true);
+[/if]
+[/for]
+[/template]
+
+[comment This template generates parameter declaration code /]
+[template private declareParameters(anEntity : entity)  post(trim())]
+[comment Declare the composite's parameters: /]
+[for (aProperty : property | anEntity.eContents(EMSML::property)->select(p : property | (p.class = 'ptolemy.data.expr.Parameter' or p.class = 'ptolemy.actor.parameters.PortParameter')))]
+this->setParameter("[aProperty.name/]", "[aProperty.value/]");
+[/for]
+[comment Declare the contained entities' parameters: /]
+[for (anEntityIter : entity | anEntity.entity)]
+[for (aProperty : property | anEntityIter.eContents(EMSML::property)->select(p : property | (p.class = 'ptolemy.data.expr.Parameter' or p.class = 'ptolemy.actor.parameters.PortParameter')))]
+['p' + anEntityIter.name.replaceAll(' ', '_').trim()/]->setParameter("[aProperty.name/]", "[aProperty.value/]");
+[/for]
+[for (aProperty : property | anEntityIter.eContents(EMSML::property)->select(p : property | p.class = 'ptolemy.actor.parameters.PortParameter'))]
+//Fixme - Cannot queue with NULL relation on Composite, have to fix the composite first...
+['p' + anEntityIter.name.replaceAll(' ', '_').trim()/]->getPort("[aProperty.name/]")->queueToken(NULL,  *(['p' + anEntityIter.name.replaceAll(' ', '_').trim()/]->getTokenParameter("[aProperty.name/]")) );
+[/for]
+[/for]
+[/template]
+
+[***********************************************
+ * This template generates code for modal controller initialization
+************************************************/]
+[template private genModalControllerInit(aControllerEntity : entity)  post(trim())
+  {className : String = aControllerEntity.name.replaceAll(' ', '_').trim();} ]
+[if (not aControllerEntity.entity->isEmpty()) ]
+/* Add states to the FSM controller: */
+  [for (aState : entity | aControllerEntity.eContents(EMSML::entity)->select(e : entity | e.class = 'ptolemy.domains.modal.kernel.State') ) ]
+    [let StateName : String = aState.name.replaceAll(' ', '_').trim() ]
+      [if (aState.eContents(EMSML::property)->select(p : property | p.name = 'isInitialState' and p.value = 'true'))->isEmpty() ]
+bInitStatus &= addState( &[StateName /] );
+      [else]
+bInitStatus &= addState( &[StateName /], true );
+      [/if]
+      [if (not (aState.eContents(EMSML::property)->select(p : property | p.name = 'refinementName'))->isEmpty()) ]
+bInitStatus &= [StateName /].addRefinement( [aState.eContents(EMSML::property)->select(p : property | p.name = 'refinementName').value /] );
+      [/if]
+    [/let]
+  [/for]
+/* Add state transitions to the FSM controller: */
+  [for (aTransition : relation | aControllerEntity.eContents(EMSML::relation)->select(r : relation | r.class = 'ptolemy.domains.modal.kernel.Transition') )]
+    [let Links : Sequence(link) = aControllerEntity.eContents(EMSML::link)->select(l : link | l.relation = aTransition.name) ]
+    [if aTransition.eContents(EMSML::property)->select(p : property | p.name = 'defaultTransition')->notEmpty()
+        and aTransition.eContents(EMSML::property)->select(p : property | p.name = 'defaultTransition')->first().value='true']
+        [if ( Links->first().port.endsWith('outgoingPort')) ]
+bInitStatus &= addTransition("[aTransition.name/]", [aTransition.name.toUpper() /], &[Links->first().port.tokenize('.')->first().replaceAll(' ', '_').trim() /], &[Links->last().port.tokenize('.')->first().replaceAll(' ', '_').trim() /], true);
+        [else]
+bInitStatus &= addTransition("[aTransition.name/]", [aTransition.name.toUpper() /], &[Links->last().port.tokenize('.')->first().replaceAll(' ', '_').trim() /], &[Links->first().port.tokenize('.')->first().replaceAll(' ', '_').trim() /], true);
+        [/if]
+    [else]
+        [if ( Links->first().port.endsWith('outgoingPort')) ]
+bInitStatus &= addTransition("[aTransition.name/]", [aTransition.name.toUpper() /], &[Links->first().port.tokenize('.')->first().replaceAll(' ', '_').trim() /], &[Links->last().port.tokenize('.')->first().replaceAll(' ', '_').trim() /]);
+        [else]
+bInitStatus &= addTransition("[aTransition.name/]", [aTransition.name.toUpper() /], &[Links->last().port.tokenize('.')->first().replaceAll(' ', '_').trim() /], &[Links->first().port.tokenize('.')->first().replaceAll(' ', '_').trim() /]);
+        [/if]
+    [/if]
+    [/let]
+  [/for]
+[/if]
+[/template]
+
